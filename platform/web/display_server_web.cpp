@@ -519,7 +519,7 @@ uint64_t DisplayServerWeb::_compute_cursor_hash(const Ref<Resource> &p_cursor, C
 		return 0;
 	}
 
-	uint64_t hash = (uint64_t)p_cursor->get_instance_ID();
+	uint64_t hash = (uint64_t)p_cursor->get_instance_id();
 	hash ^= ((uint64_t)p_shape << 32);
 	hash ^= (((uint64_t)(int)p_hotspot.x << 16) | ((uint64_t)(int)p_hotspot.y));
 	return hash;
