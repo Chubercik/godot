@@ -515,11 +515,10 @@ DisplayServer::CursorShape DisplayServerWeb::cursor_get_shape() const {
 }
 
 uint64_t DisplayServerWeb::_compute_cursor_hash(const Ref<Resource> &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) const {
-	// If there's no valid cursor resource, return 0 as the hash.
-	if (!p_cursor.is_valid())
+	if (!p_cursor.is_valid()) {
 		return 0;
+	}
 
-	// A simple hash: combine the resource's unique instance ID, the cursor shape, and hotspot.
 	uint64_t hash = (uint64_t)p_cursor->get_instance_ID();
 	hash ^= ((uint64_t)p_shape << 32);
 	hash ^= (((uint64_t)(int)p_hotspot.x << 16) | ((uint64_t)(int)p_hotspot.y));
