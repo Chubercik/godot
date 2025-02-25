@@ -531,7 +531,7 @@ uint64_t DisplayServerWeb::_compute_cursor_hash(const Ref<Resource> &p_cursor, C
 		}
 	};
 
-	Combiner combiner { seed };
+	Combiner combiner{ seed };
 
 	combiner.combine(p_cursor->get_instance_id());
 	combiner.combine(static_cast<uint64_t>(p_shape));
