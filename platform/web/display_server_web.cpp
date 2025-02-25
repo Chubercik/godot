@@ -521,24 +521,24 @@ uint64_t DisplayServerWeb::_compute_cursor_hash(const Ref<Resource> &p_cursor, C
 
 	uint64_t seed = 0;
 
-    // Local functor for combining hash values.
-    struct Combiner {
-        uint64_t &seed;
+	// Local functor for combining hash values.
+	struct Combiner {
+		uint64_t &seed;
 
-        void combine(uint64_t value) const {
-            // This uses a 64-bit constant akin to `boost::hash_combine`.
-            seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
-        }
-    };
+		void combine(uint64_t value) const {
+			// This uses a 64-bit constant akin to `boost::hash_combine`.
+			seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+		}
+	};
 
-    Combiner combiner { seed };
+	Combiner combiner { seed };
 
-    combiner.combine(p_cursor->get_instance_id());
-    combiner.combine(static_cast<uint64_t>(p_shape));
-    combiner.combine(static_cast<uint64_t>(static_cast<int>(p_hotspot.x)));
-    combiner.combine(static_cast<uint64_t>(static_cast<int>(p_hotspot.y)));
+	combiner.combine(p_cursor->get_instance_id());
+	combiner.combine(static_cast<uint64_t>(p_shape));
+	combiner.combine(static_cast<uint64_t>(static_cast<int>(p_hotspot.x)));
+	combiner.combine(static_cast<uint64_t>(static_cast<int>(p_hotspot.y)));
 
-    return seed;
+	return seed;
 }
 
 void DisplayServerWeb::cursor_set_custom_image(const Ref<Resource> &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) {
