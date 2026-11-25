@@ -39,6 +39,7 @@
 class AddMetadataDialog;
 class AcceptDialog;
 class EditorInspector;
+class HFlowContainer;
 class HSeparator;
 class LineEdit;
 class MarginContainer;
@@ -631,10 +632,14 @@ class EditorInspectorArray : public EditorInspectorSection {
 	Control *control_dropping = nullptr;
 	bool dropping = false;
 
+	HFlowContainer *buttons_container = nullptr;
 	Button *add_button = nullptr;
+	Button *resize_button = nullptr;
 
 	AcceptDialog *resize_dialog = nullptr;
 	SpinBox *new_size_spin_box = nullptr;
+	Label *range_label = nullptr;
+	bool has_explicit_max = false;
 
 	// Pagination.
 	int page_length = 5;
@@ -678,6 +683,7 @@ class EditorInspectorArray : public EditorInspectorSection {
 
 	int _get_array_count();
 	void _add_button_pressed();
+	void _open_resize_dialog();
 	void _paginator_page_changed(int p_page);
 
 	void _rmb_popup_id_pressed(int p_id);
@@ -697,8 +703,11 @@ class EditorInspectorArray : public EditorInspectorSection {
 	int _drop_position() const;
 
 	void _new_size_spin_box_value_changed(float p_value);
+	void _new_size_spin_box_text_changed(const String &p_text);
 	void _new_size_spin_box_text_submitted(const String &p_text);
+	bool _try_parse_new_size(const String &p_text, int &r_size) const;
 	void _resize_dialog_confirmed();
+	void _update_size_range_from_property(const PropertyInfo &p_property);
 
 	void _update_elements_visibility();
 	void _setup();
@@ -716,6 +725,7 @@ protected:
 public:
 	void setup_with_move_element_function(Object *p_object, const String &p_category, const String &p_label, const StringName &p_array_element_prefix, int p_page, const Color &p_bg_color, bool p_foldable, bool p_movable = true, bool p_is_const = false, bool p_numbered = false, int p_page_length = 5, const String &p_add_item_text = "");
 	void setup_with_count_property(Object *p_object, const String &p_category, const String &p_label, const StringName &p_count_property, const StringName &p_array_element_prefix, int p_page, const Color &p_bg_color, bool p_foldable, bool p_movable = true, bool p_is_const = false, bool p_numbered = false, int p_page_length = 5, const String &p_add_item_text = "", const String &p_swap_method = "");
+	void set_size_range(int p_min, int p_max);
 	VBoxContainer *get_vbox(int p_index);
 
 	void show_menu(int p_index, const Vector2 &p_offset);

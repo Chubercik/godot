@@ -54,6 +54,7 @@
 #include "editor/settings/editor_feature_profile.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
+#include "scene/gui/flow_container.h"
 #include "scene/gui/margin_container.h"
 #include "scene/gui/separator.h"
 #include "scene/gui/spin_box.h"
@@ -3066,6 +3067,30 @@ void EditorInspectorArray::_add_button_pressed() {
 	_move_element(-1, -1);
 }
 
+void EditorInspectorArray::_open_resize_dialog() {
+	if (mode == MODE_USE_COUNT_PROPERTY && object) {
+		List<PropertyInfo> plist;
+		object->get_property_list(&plist);
+		for (const PropertyInfo &pi : plist) {
+			if (pi.name == count_property) {
+				_update_size_range_from_property(pi);
+				break;
+			}
+		}
+	}
+
+	new_size_spin_box->set_value_no_signal(count);
+	new_size_spin_box->get_line_edit()->set_text(itos(int(new_size_spin_box->get_value())));
+	range_label->set_visible(has_explicit_max);
+	if (has_explicit_max) {
+		range_label->set_text(vformat("%d - %d", int(new_size_spin_box->get_min()), int(new_size_spin_box->get_max())));
+	}
+	resize_dialog->get_ok_button()->set_disabled(false);
+	resize_dialog->popup_centered(Size2(250, 0) * EDSCALE);
+	new_size_spin_box->get_line_edit()->grab_focus();
+	new_size_spin_box->get_line_edit()->select_all();
+}
+
 void EditorInspectorArray::_paginator_page_changed(int p_page) {
 	emit_signal("page_change_request", p_page);
 }
@@ -3095,11 +3120,7 @@ void EditorInspectorArray::_rmb_popup_id_pressed(int p_id) {
 			_clear_array();
 			break;
 		case OPTION_RESIZE_ARRAY:
-			new_size_spin_box->set_value(count);
-			resize_dialog->get_ok_button()->set_disabled(true);
-			resize_dialog->popup_centered(Size2(250, 0) * EDSCALE);
-			new_size_spin_box->get_line_edit()->grab_focus();
-			new_size_spin_box->get_line_edit()->select_all();
+			_open_resize_dialog();
 			break;
 		default:
 			break;
@@ -3507,21 +3528,63 @@ int EditorInspectorArray::_drop_position() const {
 	return -1;
 }
 
+bool EditorInspectorArray::_try_parse_new_size(const String &p_text, int &r_size) const {
+	const String trimmed = p_text.strip_edges();
+	if (!trimmed.is_valid_int()) {
+		return false;
+	}
+	int64_t parsed = trimmed.to_int();
+	int min_size = int(new_size_spin_box->get_min());
+	int max_size = int(new_size_spin_box->get_max());
+	if (parsed < min_size || parsed > max_size) {
+		return false;
+	}
+	r_size = int(parsed);
+	return true;
+}
+
 void EditorInspectorArray::_resize_dialog_confirmed() {
-	if (int(new_size_spin_box->get_value()) == count) {
+	int new_size = 0;
+	if (!_try_parse_new_size(new_size_spin_box->get_line_edit()->get_text(), new_size)) {
 		return;
 	}
 
 	resize_dialog->hide();
-	_resize_array(int(new_size_spin_box->get_value()));
+	if (new_size != count) {
+		_resize_array(new_size);
+	}
 }
 
 void EditorInspectorArray::_new_size_spin_box_value_changed(float p_value) {
-	resize_dialog->get_ok_button()->set_disabled(int(p_value) == count);
+	int new_size = int(p_value);
+	int min_size = int(new_size_spin_box->get_min());
+	int max_size = int(new_size_spin_box->get_max());
+	resize_dialog->get_ok_button()->set_disabled(new_size < min_size || new_size > max_size);
+}
+
+void EditorInspectorArray::_new_size_spin_box_text_changed(const String &p_text) {
+	int parsed = 0;
+	bool valid = _try_parse_new_size(p_text, parsed);
+	resize_dialog->get_ok_button()->set_disabled(!valid);
 }
 
 void EditorInspectorArray::_new_size_spin_box_text_submitted(const String &p_text) {
 	_resize_dialog_confirmed();
+}
+
+void EditorInspectorArray::_update_size_range_from_property(const PropertyInfo &p_property) {
+	if (p_property.hint == PROPERTY_HINT_RANGE) {
+		Vector<String> range_slices = p_property.hint_string.split(",");
+		if (range_slices.size() >= 2 && range_slices[0].strip_edges().is_valid_int() && range_slices[1].strip_edges().is_valid_int()) {
+			int min_size = MAX(0, range_slices[0].strip_edges().to_int());
+			int max_size = MAX(min_size, range_slices[1].strip_edges().to_int());
+			set_size_range(min_size, max_size);
+			return;
+		}
+	}
+	has_explicit_max = false;
+	new_size_spin_box->set_min(0);
+	new_size_spin_box->set_max(16384);
 }
 
 void EditorInspectorArray::_setup() {
@@ -3651,8 +3714,11 @@ void EditorInspectorArray::_setup() {
 		}
 	}
 
-	// Hide/show the add button.
-	add_button->set_visible(page == max_page && !unresizable);
+	// Hide/show the add and resize buttons.
+	bool show_buttons = page == max_page && !unresizable;
+	add_button->set_visible(show_buttons);
+	resize_button->set_visible(show_buttons);
+	buttons_container->set_visible(show_buttons);
 
 	// Add paginator if there's more than 1 page.
 	if (max_page > 0) {
@@ -3833,6 +3899,12 @@ void EditorInspectorArray::setup_with_count_property(Object *p_object, const Str
 	_setup();
 }
 
+void EditorInspectorArray::set_size_range(int p_min, int p_max) {
+	has_explicit_max = true;
+	new_size_spin_box->set_min(p_min);
+	new_size_spin_box->set_max(p_max);
+}
+
 VBoxContainer *EditorInspectorArray::get_vbox(int p_index) {
 	if (p_index >= begin_array_index && p_index < end_array_index) {
 		return array_elements[p_index - begin_array_index].vbox;
@@ -3868,10 +3940,20 @@ EditorInspectorArray::EditorInspectorArray(bool p_read_only) {
 	elements_vbox->add_theme_constant_override("separation", 0);
 	vbox->add_child(elements_vbox);
 
+	buttons_container = memnew(HFlowContainer);
+	buttons_container->set_alignment(FlowContainer::ALIGNMENT_CENTER);
+	buttons_container->set_last_wrap_alignment(FlowContainer::LAST_WRAP_ALIGNMENT_CENTER);
+	vbox->add_child(buttons_container);
+
 	add_button = memnew(EditorInspectorActionButton(TTRC("Add Element"), SNAME("Add")));
 	add_button->connect(SceneStringName(pressed), callable_mp(this, &EditorInspectorArray::_add_button_pressed));
 	add_button->set_disabled(read_only);
-	vbox->add_child(add_button);
+	buttons_container->add_child(add_button);
+
+	resize_button = memnew(EditorInspectorActionButton(TTRC("Resize Array..."), SNAME("EditAddRemove")));
+	resize_button->connect(SceneStringName(pressed), callable_mp(this, &EditorInspectorArray::_open_resize_dialog));
+	resize_button->set_disabled(read_only);
+	buttons_container->add_child(resize_button);
 
 	control_dropping = memnew(Control);
 	control_dropping->connect(SceneStringName(draw), callable_mp(this, &EditorInspectorArray::_control_dropping_draw));
@@ -3880,6 +3962,7 @@ EditorInspectorArray::EditorInspectorArray(bool p_read_only) {
 
 	resize_dialog = memnew(AcceptDialog);
 	resize_dialog->set_title(TTRC("Resize Array"));
+	resize_dialog->set_hide_on_ok(false);
 	resize_dialog->add_cancel_button();
 	resize_dialog->connect(SceneStringName(confirmed), callable_mp(this, &EditorInspectorArray::_resize_dialog_confirmed));
 	add_child(resize_dialog);
@@ -3887,13 +3970,23 @@ EditorInspectorArray::EditorInspectorArray(bool p_read_only) {
 	VBoxContainer *resize_dialog_vbox = memnew(VBoxContainer);
 	resize_dialog->add_child(resize_dialog_vbox);
 
+	HBoxContainer *new_size_hbox = memnew(HBoxContainer);
+	resize_dialog_vbox->add_margin_child(TTRC("New Size:"), new_size_hbox);
+
 	new_size_spin_box = memnew(SpinBox);
 	new_size_spin_box->set_accessibility_name(TTRC("New Size:"));
+	new_size_spin_box->set_h_size_flags(SIZE_EXPAND_FILL);
 	new_size_spin_box->set_max(16384);
 	new_size_spin_box->connect(SceneStringName(value_changed), callable_mp(this, &EditorInspectorArray::_new_size_spin_box_value_changed));
+	new_size_spin_box->get_line_edit()->connect(SceneStringName(text_changed), callable_mp(this, &EditorInspectorArray::_new_size_spin_box_text_changed));
 	new_size_spin_box->get_line_edit()->connect(SceneStringName(text_submitted), callable_mp(this, &EditorInspectorArray::_new_size_spin_box_text_submitted));
 	new_size_spin_box->set_editable(!read_only);
-	resize_dialog_vbox->add_margin_child(TTRC("New Size:"), new_size_spin_box);
+	new_size_hbox->add_child(new_size_spin_box);
+
+	range_label = memnew(Label);
+	range_label->set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER);
+	range_label->hide();
+	new_size_hbox->add_child(range_label);
 
 	vbox->connect(SceneStringName(visibility_changed), callable_mp(this, &EditorInspectorArray::_vbox_visibility_changed));
 }

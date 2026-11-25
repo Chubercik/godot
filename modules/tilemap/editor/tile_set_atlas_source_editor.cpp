@@ -266,7 +266,7 @@ bool TileSetAtlasSourceEditor::AtlasTileProxyObject::_set(const StringName &p_na
 				}
 			}
 			notify_property_list_changed();
-			emit_signal(CoreStringName(changed), "animation_separation");
+			emit_signal(CoreStringName(changed), "animation_frames_count");
 			return true;
 		} else if (components.size() == 2 && components[0].begins_with("animation_frame_") && components[0].trim_prefix("animation_frame_").is_valid_int()) {
 			for (TileSelection tile : tiles) {
@@ -390,6 +390,72 @@ bool TileSetAtlasSourceEditor::AtlasTileProxyObject::_get(const StringName &p_na
 	return false;
 }
 
+int TileSetAtlasSourceEditor::AtlasTileProxyObject::_get_max_animation_frames_count() const {
+	if (tile_set_atlas_source.is_null() || tiles.is_empty()) {
+		return 1;
+	}
+
+	const Size2i atlas_grid_size = tile_set_atlas_source->get_atlas_grid_size();
+	int max_frames = 16384;
+
+	for (const TileSelection &tile : tiles) {
+		if (!tile_set_atlas_source->has_tile(tile.tile)) {
+			return 1;
+		}
+
+		const Vector2i coords = tile.tile;
+		const Vector2i size = tile_set_atlas_source->get_tile_size_in_atlas(coords);
+		const int cols = tile_set_atlas_source->get_tile_animation_columns(coords);
+		const Vector2i sep = tile_set_atlas_source->get_tile_animation_separation(coords);
+		const Vector2i step = size + sep;
+
+		if (coords.x < 0 || coords.y < 0 || size.x <= 0 || size.y <= 0 || step.x <= 0 || step.y <= 0 ||
+				coords.x + size.x > atlas_grid_size.x || coords.y + size.y > atlas_grid_size.y) {
+			return 1;
+		}
+
+		const int max_cols_in_atlas = (atlas_grid_size.x - coords.x - size.x) / step.x + 1;
+		int tile_max_bound = max_cols_in_atlas;
+		if (cols > 0 && cols <= max_cols_in_atlas) {
+			const int max_rows_in_atlas = (atlas_grid_size.y - coords.y - size.y) / step.y + 1;
+			if (max_rows_in_atlas > max_frames / cols) {
+				tile_max_bound = max_frames;
+			} else {
+				tile_max_bound = cols * max_rows_in_atlas;
+			}
+		}
+		tile_max_bound = MIN(tile_max_bound, max_frames);
+
+		int tile_max = 0;
+		for (int frame = 0; frame < tile_max_bound; frame++) {
+			const Vector2i frame_coords = coords + step * ((cols > 0) ? Vector2i(frame % cols, frame / cols) : Vector2i(frame, 0));
+			bool blocked = false;
+			for (int x = 0; x < size.x && !blocked; x++) {
+				for (int y = 0; y < size.y; y++) {
+					const Vector2i cell = frame_coords + Vector2i(x, y);
+					if (cell.x >= atlas_grid_size.x || cell.y >= atlas_grid_size.y) {
+						blocked = true;
+						break;
+					}
+					const Vector2i occupying = tile_set_atlas_source->get_tile_at_coords(cell);
+					if (occupying != TileSetSource::INVALID_ATLAS_COORDS && occupying != coords) {
+						blocked = true;
+						break;
+					}
+				}
+			}
+			if (blocked) {
+				break;
+			}
+			tile_max = frame + 1;
+		}
+
+		max_frames = MIN(max_frames, MAX(1, tile_max));
+	}
+
+	return MAX(1, max_frames);
+}
+
 void TileSetAtlasSourceEditor::AtlasTileProxyObject::_get_property_list(List<PropertyInfo> *p_list) const {
 	if (tile_set_atlas_source.is_null()) {
 		return;
@@ -425,7 +491,8 @@ void TileSetAtlasSourceEditor::AtlasTileProxyObject::_get_property_list(List<Pro
 		p_list->push_back(PropertyInfo(Variant::VECTOR2I, PNAME("animation_separation")));
 		p_list->push_back(PropertyInfo(Variant::FLOAT, PNAME("animation_speed")));
 		p_list->push_back(PropertyInfo(Variant::INT, PNAME("animation_mode"), PROPERTY_HINT_ENUM, "Default,Random Start Times"));
-		p_list->push_back(PropertyInfo(Variant::INT, PNAME("animation_frames_count"), PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_ARRAY, "Frames,animation_frame_"));
+		int max_frames = _get_max_animation_frames_count();
+		p_list->push_back(PropertyInfo(Variant::INT, PNAME("animation_frames_count"), PROPERTY_HINT_RANGE, vformat("1,%d,1", max_frames), PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_ARRAY, "Frames,animation_frame_"));
 		// Not optimal, but returns value for the first tile. This is similar to what MultiNodeEdit does.
 		if (tile_set_atlas_source->get_tile_animation_frames_count(tiles.front()->get().tile) == 1) {
 			p_list->push_back(PropertyInfo(Variant::FLOAT, "animation_frame_0/duration", PROPERTY_HINT_NONE, "suffix:s", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_READ_ONLY));
